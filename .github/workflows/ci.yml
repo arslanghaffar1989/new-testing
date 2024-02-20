@@ -2,61 +2,60 @@ name: Continuous Integration
 
 on: [push, pull_request]
 
+env:
+  AWS_REGION: 'ca-central-1'
+  AMI_ID: 'ami-053a34d754a0d10c8'
+  INSTANCE_TYPE: 't2.micro'
+  KEY_NAME: 'arslan-test-key'
+  SECURITY_GROUP_IDS: 'sg-0c8fda260d91f58dd'
+  SUBNET_ID: 'subnet-03ca8cb69c5f65f84'
+
 jobs:
+  create-ec2-instance:
+    runs-on: ubuntu-latest
+    outputs:
+      instance-id: ${{ steps.create_ec2.outputs.instance-id }}
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Launch EC2 Instance
+        id: create_ec2
+        run: |
+          INSTANCE_ID=$(aws ec2 run-instances --image-id ${{ env.AMI_ID }} --count 1 --instance-type ${{ env.INSTANCE_TYPE }} --key-name ${{ env.KEY_NAME }} --security-group-ids ${{ env.SECURITY_GROUP_IDS }} --subnet-id ${{ env.SUBNET_ID }} --query 'Instances[0].InstanceId' --output text)
+          echo "::set-output name=instance-id::$INSTANCE_ID"
+          echo "Launched EC2 Instance: $INSTANCE_ID"
+
+      - name: Wait for EC2 instance to be running
+        run: |
+          aws ec2 wait instance-running --instance-ids ${{ steps.create_ec2.outputs.instance-id }}
+          echo "EC2 Instance is up and running."
+
   setup-and-test:
-    runs-on: [self-hosted, linux, x64] # Adjust with your self-hosted runner labels
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.0'
-        extensions: mbstring, pdo_pgsql
-        tools: composer, phpunit
-
-    - name: Check PHP Version
-      run: php --version
-
-    - name: Install PostgreSQL Client (Optional)
-      run: sudo apt-get install -y postgresql-client
-
-    - name: Check PostgreSQL Client Version
-      run: psql --version
-
-    # Place your additional setup and test commands here
-
-  deploy-to-dev:
-    if: github.ref == 'refs/heads/dev'
-    needs: setup-and-test
+    needs: create-ec2-instance
     runs-on: [self-hosted, linux, x64]
     steps:
-    - uses: actions/checkout@v2
-    - name: Deploy to Development
-      run: |
-        echo "Deploying to development server..."
-        # Your deployment script for dev
+      - uses: actions/checkout@v2
 
-  deploy-to-staging:
-    if: github.ref == 'refs/heads/staging'
-    needs: setup-and-test
-    runs-on: [self-hosted, linux, x64]
+      # Your existing steps for setup, test, and deployment
+
+  stop-ec2-instance:
+    if: always()
+    needs: [setup-and-test]
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Deploy to Staging
-      run: |
-        echo "Deploying to staging server..."
-        # Your deployment script for staging
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-  deploy-to-production:
-    if: github.ref == 'refs/tags/*'
-    needs: setup-and-test
-    runs-on: [self-hosted, linux, x64]
-    steps:
-    - uses: actions/checkout@v2
-    - name: Deploy to Production
-      run: |
-        echo "Deploying to production server..."
-        # Your deployment script for production
-
-  
+      - name: Stop EC2 Instance
+        run: |
+          aws ec2 terminate-instances --instance-ids ${{ needs.create-ec2-instance.outputs.instance-id }}
+          echo "EC2 Instance has been terminated."
