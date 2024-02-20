@@ -24,9 +24,6 @@ jobs:
     - name: Check PostgreSQL Client Version
       run: psql --version
 
-    - name: Check PostgreSQL Server Version
-      run: PGPASSWORD=postgres psql -h localhost -U postgres -c "SELECT version();"
-
     # Place your additional setup and test commands here
 
   deploy-to-dev:
