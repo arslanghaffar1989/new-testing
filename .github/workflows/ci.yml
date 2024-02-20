@@ -60,14 +60,3 @@ jobs:
         # Your deployment script for production
 
   
-  stop-runner:
-    if: always() # This ensures the runner is stopped regardless of job success/failure
-    needs: [deploy-to-dev, deploy-to-staging, deploy-to-production]
-    runs-on: [self-hosted, linux, x64]
-    steps:
-      - name: Stop EC2 Runner
-        run: |
-          # Script to de-register the runner and stop the EC2 instance
-          echo "Stopping self-hosted runner and EC2 instance..."
-          INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
-          aws ec2 stop-instances --instance-ids $INSTANCE_ID
