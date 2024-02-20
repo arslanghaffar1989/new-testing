@@ -4,70 +4,60 @@ on: [push, pull_request]
 
 jobs:
   setup-and-test:
-    runs-on: [self-hosted, linux, x64] # Specify your self-hosted runner labels
+    runs-on: [self-hosted, linux, x64] # Adjust with your self-hosted runner labels
     steps:
-      - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
 
-      - name: Setup PHP
-        run: |
-          sudo add-apt-repository -y ppa:ondrej/php
-          sudo apt-get update
-          sudo apt-get install -y php8.0.9 libxml2-dev
-          php --version
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.0'
+        extensions: mbstring, pdo_pgsql
+        tools: composer, phpunit
 
-      - name: Check PostgreSQL Client Version
-        run: psql --version
+    - name: Check PHP Version
+      run: php --version
 
-      - name: Check PostgreSQL Server Version
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "SELECT version();"
+    - name: Install PostgreSQL Client (Optional)
+      run: sudo apt-get install -y postgresql-client
 
-      # Add your test scripts here
-      - name: Run Tests
-        run: |
-          echo "Running tests..."
+    - name: Check PostgreSQL Client Version
+      run: psql --version
+
+    - name: Check PostgreSQL Server Version
+      run: PGPASSWORD=postgres psql -h localhost -U postgres -c "SELECT version();"
+
+    # Place your additional setup and test commands here
 
   deploy-to-dev:
     if: github.ref == 'refs/heads/dev'
     needs: setup-and-test
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v2
-      - name: Deploy to Development
-        run: |
-          echo "Deploying to development server..."
-          # Your deployment script for dev
+    - uses: actions/checkout@v2
+    - name: Deploy to Development
+      run: |
+        echo "Deploying to development server..."
+        # Your deployment script for dev
 
   deploy-to-staging:
     if: github.ref == 'refs/heads/staging'
     needs: setup-and-test
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v2
-      - name: Deploy to Staging
-        run: |
-          echo "Deploying to staging server..."
-          # Your deployment script for staging
+    - uses: actions/checkout@v2
+    - name: Deploy to Staging
+      run: |
+        echo "Deploying to staging server..."
+        # Your deployment script for staging
 
   deploy-to-production:
     if: github.ref == 'refs/tags/*'
     needs: setup-and-test
     runs-on: [self-hosted, linux, x64]
     steps:
-      - uses: actions/checkout@v2
-      - name: Deploy to Production
-        run: |
-          echo "Deploying to production server..."
-          # Your deployment script for production
-
-  stop-runner:
-    if: always() # This ensures the runner is stopped regardless of job success/failure
-    needs: [deploy-to-dev, deploy-to-staging, deploy-to-production]
-    runs-on: [self-hosted, linux, x64]
-    steps:
-      - name: Stop EC2 Runner
-        run: |
-          # Script to de-register the runner and stop the EC2 instance
-          echo "Stopping self-hosted runner and EC2 instance..."
-          INSTANCE_ID=$(curl http://169.254.169.254/latest/meta-data/instance-id)
-          aws ec2 stop-instances --instance-ids $INSTANCE_ID
+    - uses: actions/checkout@v2
+    - name: Deploy to Production
+      run: |
+        echo "Deploying to production server..."
+        # Your deployment script for production
